@@ -4518,14 +4518,20 @@ extern "C" {
 // =======================================================================//
 
     int is_udp_socket(const ENetSocket& socket) {
-        int type;
-        socklen_t len = sizeof(type);
-
-        if (getsockopt(socket, SOL_SOCKET, SO_TYPE, (char*)&type, &len) == -1) {
+        #ifdef _WIN32
+            WSAPROTOCOL_INFO info;
+            int len = sizeof(info);
+            if (getsockopt(socket, SOL_SOCKET, SO_PROTOCOL_INFO, (char*)&info, &len) == 0) {
+                return (info.iSocketType == SOCK_DGRAM);
+            }
+        #else
+            int type;
+            socklen_t len = sizeof(type);
+            if (getsockopt(socket, SOL_SOCKET, SO_TYPE, &type, &len) == 0) {
+                return (type == SOCK_DGRAM);
+            }
+        #endif
             return 0; // Error: Could not determine socket type
-        }
-        
-        return (type == SOCK_DGRAM); // Returns 1 if UDP, 0 if not
     }
 
     /** Creates a host for communicating to peers.
