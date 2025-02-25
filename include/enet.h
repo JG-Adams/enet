@@ -1012,7 +1012,7 @@ extern "C" {
     ENET_API ENetPacket * enet_packet_create_offset(const void *, size_t, size_t, enet_uint32);
     ENET_API enet_uint32  enet_crc32(const ENetBuffer *, size_t);
 
-    ENET_API ENetHost * enet_host_create(const ENetAddress *, size_t, size_t, enet_uint32, enet_uint32, ENetSocket* externalUDPSocket=NULL);
+    ENET_API ENetHost * enet_host_create(const ENetAddress *, size_t, size_t, enet_uint32, enet_uint32, ENetSocket* externalUDPSocket);
     ENET_API void       enet_host_destroy(ENetHost *);
     ENET_API ENetPeer * enet_host_connect(ENetHost *, const ENetAddress *, size_t, enet_uint32);
     ENET_API int        enet_host_check_events(ENetHost *, ENetEvent *);
@@ -3150,11 +3150,13 @@ extern "C" {
         int sentLength = 0;
         size_t shouldCompress = 0;
         ENetList sentUnreliableCommands;
+        int sendPass = 0, continueSending = 0;
+        ENetPeer *currentPeer;
 
         enet_list_clear (&sentUnreliableCommands);
 
-        for (int sendPass = 0, continueSending = 0; sendPass <= continueSending; ++ sendPass)
-            for(ENetPeer *currentPeer = host->peers; currentPeer < &host->peers[host->peerCount]; ++currentPeer) {
+        for (; sendPass <= continueSending; ++ sendPass)
+            for(currentPeer = host->peers; currentPeer < &host->peers[host->peerCount]; ++currentPeer) {
                 if (currentPeer->state == ENET_PEER_STATE_DISCONNECTED || currentPeer->state == ENET_PEER_STATE_ZOMBIE || (sendPass > 0 && ! (currentPeer->flags & ENET_PEER_FLAG_CONTINUE_SENDING))) {
                     continue;
                 }
@@ -4517,11 +4519,11 @@ extern "C" {
 // !
 // =======================================================================//
 
-    int is_udp_socket(const ENetSocket& socket) {
+    int is_udp_socket(const ENetSocket* socket) {
         #ifdef _WIN32
             WSAPROTOCOL_INFO info;
             int len = sizeof(info);
-            if (getsockopt(socket, SOL_SOCKET, SO_PROTOCOL_INFO, (char*)&info, &len) == 0) {
+            if (getsockopt(*socket, SOL_SOCKET, SO_PROTOCOL_INFO, (char*)&info, &len) == 0) {
                 return (info.iSocketType == SOCK_DGRAM);
             }
         #else
@@ -4569,7 +4571,7 @@ extern "C" {
 
         memset(host->peers, 0, peerCount * sizeof(ENetPeer));
 
-        if (externalUDPSocket==NULL || !is_udp_socket(*externalUDPSocket)){
+        if (externalUDPSocket==NULL || !is_udp_socket(externalUDPSocket)){
             host->socket = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
             if (host->socket != ENET_SOCKET_NULL) {
                 enet_socket_set_option (host->socket, ENET_SOCKOPT_IPV6_V6ONLY, 0);
